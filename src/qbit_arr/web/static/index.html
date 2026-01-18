@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>qbit-arr Dashboard</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+          Cantarell, sans-serif;
+        background: #0d1117;
+        color: #c9d1d9;
+        line-height: 1.6;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      header {
+        background: #161b22;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border: 1px solid #30363d;
+      }
+
+      h1 {
+        color: #58a6ff;
+        font-size: 2em;
+        margin-bottom: 10px;
+      }
+
+      .tagline {
+        color: #8b949e;
+        font-size: 1.1em;
+      }
+
+      .controls {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+
+      button {
+        background: #238636;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        transition: background 0.2s;
+      }
+
+      button:hover {
+        background: #2ea043;
+      }
+
+      button:disabled {
+        background: #21262d;
+        color: #484f58;
+        cursor: not-allowed;
+      }
+
+      button.secondary {
+        background: #21262d;
+        border: 1px solid #30363d;
+      }
+
+      button.secondary:hover {
+        background: #30363d;
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+      }
+
+      .stat-card {
+        background: #161b22;
+        padding: 20px;
+        border-radius: 8px;
+        border: 1px solid #30363d;
+      }
+
+      .stat-label {
+        color: #8b949e;
+        font-size: 0.9em;
+        margin-bottom: 5px;
+      }
+
+      .stat-value {
+        font-size: 2em;
+        font-weight: bold;
+        color: #58a6ff;
+      }
+
+      .stat-value.warning {
+        color: #f85149;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid #30363d;
+      }
+
+      .tab {
+        background: none;
+        border: none;
+        color: #8b949e;
+        padding: 10px 20px;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        transition: all 0.2s;
+      }
+
+      .tab.active {
+        color: #58a6ff;
+        border-bottom-color: #58a6ff;
+      }
+
+      .tab:hover {
+        color: #c9d1d9;
+      }
+
+      .tab-content {
+        display: none;
+      }
+
+      .tab-content.active {
+        display: block;
+      }
+
+      .section {
+        background: #161b22;
+        padding: 20px;
+        border-radius: 8px;
+        border: 1px solid #30363d;
+        margin-bottom: 20px;
+      }
+
+      .section h2 {
+        color: #c9d1d9;
+        margin-bottom: 15px;
+        font-size: 1.5em;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9em;
+      }
+
+      th {
+        background: #21262d;
+        color: #c9d1d9;
+        padding: 12px;
+        text-align: left;
+        font-weight: 600;
+      }
+
+      td {
+        padding: 12px;
+        border-bottom: 1px solid #30363d;
+      }
+
+      tr:hover {
+        background: #21262d;
+      }
+
+      .status {
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border-left: 4px solid;
+      }
+
+      .status.loading {
+        background: #1c2128;
+        border-color: #f0883e;
+        color: #f0883e;
+      }
+
+      .status.success {
+        background: #0c1c12;
+        border-color: #2ea043;
+        color: #3fb950;
+      }
+
+      .status.error {
+        background: #1c1214;
+        border-color: #f85149;
+        color: #f85149;
+      }
+
+      .loading-spinner {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid #30363d;
+        border-top-color: #58a6ff;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      .badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.8em;
+        font-weight: 600;
+      }
+
+      .badge.torrent {
+        background: #58a6ff33;
+        color: #58a6ff;
+      }
+
+      .badge.radarr {
+        background: #f0883e33;
+        color: #f0883e;
+      }
+
+      .badge.sonarr {
+        background: #3fb95033;
+        color: #3fb950;
+      }
+
+      .badge.orphan {
+        background: #f8514933;
+        color: #f85149;
+      }
+
+      .file-path {
+        font-family: "Courier New", monospace;
+        color: #79c0ff;
+        font-size: 0.9em;
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #8b949e;
+      }
+
+      .empty-state svg {
+        width: 64px;
+        height: 64px;
+        margin-bottom: 20px;
+        opacity: 0.5;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>🎬 qbit-arr Dashboard</h1>
+        <p class="tagline">
+          Media file relationship and orphan detection for qBittorrent, Radarr &
+          Sonarr
+        </p>
+      </header>
+
+      <div class="controls">
+        <button id="scanBtn" onclick="runScan()">
+          <span id="scanBtnText">🔍 Run Full Scan</span>
+        </button>
+        <button class="secondary" onclick="refreshData()">🔄 Refresh</button>
+        <button class="secondary" onclick="exportJSON()">💾 Export JSON</button>
+      </div>
+
+      <div id="statusArea"></div>
+
+      <div class="stats-grid" id="statsGrid">
+        <!-- Stats will be populated here -->
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('overview')">
+          Overview
+        </button>
+        <button class="tab" onclick="switchTab('orphans')">
+          Orphaned Files
+        </button>
+        <button class="tab" onclick="switchTab('hardlinks')">Hardlinks</button>
+        <button class="tab" onclick="switchTab('relationships')">
+          File Relationships
+        </button>
+      </div>
+
+      <div id="overview" class="tab-content active">
+        <div class="section">
+          <h2>System Overview</h2>
+          <p>
+            Click "Run Full Scan" to analyze your media files and detect
+            relationships between qBittorrent torrents, Radarr movies, and
+            Sonarr TV shows.
+          </p>
+        </div>
+      </div>
+
+      <div id="orphans" class="tab-content">
+        <div class="section">
+          <h2>Orphaned Files</h2>
+          <div id="orphansContent">
+            <div class="empty-state">
+              <p>No scan results yet. Run a scan to detect orphaned files.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="hardlinks" class="tab-content">
+        <div class="section">
+          <h2>Hardlink Groups</h2>
+          <div id="hardlinksContent">
+            <div class="empty-state">
+              <p>No scan results yet. Run a scan to analyze hardlinks.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="relationships" class="tab-content">
+        <div class="section">
+          <h2>File Relationships</h2>
+          <div id="relationshipsContent">
+            <div class="empty-state">
+              <p>No scan results yet. Run a scan to see file relationships.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let scanResults = null;
+
+      function switchTab(tabName) {
+        // Update tab buttons
+        document.querySelectorAll(".tab").forEach((tab) => {
+          tab.classList.remove("active");
+        });
+        event.target.classList.add("active");
+
+        // Update tab content
+        document.querySelectorAll(".tab-content").forEach((content) => {
+          content.classList.remove("active");
+        });
+        document.getElementById(tabName).classList.add("active");
+      }
+
+      function showStatus(message, type = "loading") {
+        const statusArea = document.getElementById("statusArea");
+        const spinner =
+          type === "loading" ? '<span class="loading-spinner"></span> ' : "";
+        statusArea.innerHTML = `<div class="status ${type}">${spinner}${message}</div>`;
+      }
+
+      function hideStatus() {
+        document.getElementById("statusArea").innerHTML = "";
+      }
+
+      function formatBytes(bytes) {
+        if (bytes === 0) return "0 B";
+        const k = 1024;
+        const sizes = ["B", "KB", "MB", "GB", "TB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+      }
+
+      function updateStats(stats) {
+        const statsGrid = document.getElementById("statsGrid");
+        statsGrid.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-label">Total Files</div>
+                    <div class="stat-value">${stats.total_files}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Size</div>
+                    <div class="stat-value">${formatBytes(stats.total_size)}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Orphaned Files</div>
+                    <div class="stat-value warning">${stats.orphaned_files}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Hardlink Groups</div>
+                    <div class="stat-value">${stats.hardlink_groups}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Torrents</div>
+                    <div class="stat-value">${stats.torrents_count}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Cross-Seeded</div>
+                    <div class="stat-value">${stats.cross_seeded_groups}</div>
+                </div>
+            `;
+      }
+
+      function updateOrphans(orphans) {
+        const content = document.getElementById("orphansContent");
+
+        if (orphans.length === 0) {
+          content.innerHTML =
+            '<div class="empty-state"><p>✅ No orphaned files found!</p></div>';
+          return;
+        }
+
+        let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Location</th>
+                            <th>Path</th>
+                            <th>Size</th>
+                            <th>Reason</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+        orphans.forEach((orphan, index) => {
+          html += `
+                    <tr id="orphan-row-${index}">
+                        <td><span class="badge orphan">${orphan.location}</span></td>
+                        <td><span class="file-path">${orphan.path}</span></td>
+                        <td>${formatBytes(orphan.size)}</td>
+                        <td>${orphan.reason}</td>
+                        <td>
+                            <button onclick="deleteFile('${orphan.path.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}', ${index})" 
+                                    style="background: #f85149; padding: 5px 10px; font-size: 12px;">
+                                🗑️ Delete
+                            </button>
+                        </td>
+                    </tr>
+                `;
+        });
+
+        html += "</tbody></table>";
+        content.innerHTML = html;
+      }
+
+      async function deleteFile(filePath, rowIndex) {
+        if (
+          !confirm(`Are you sure you want to delete this file?\n\n${filePath}`)
+        ) {
+          return;
+        }
+
+        try {
+          const response = await fetch(
+            `/api/file?file_path=${encodeURIComponent(filePath)}`,
+            {
+              method: "DELETE",
+            },
+          );
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || "Failed to delete file");
+          }
+
+          const result = await response.json();
+
+          // Remove the row from the table
+          const row = document.getElementById(`orphan-row-${rowIndex}`);
+          if (row) {
+            row.style.backgroundColor = "#2ea04333";
+            setTimeout(() => row.remove(), 500);
+          }
+
+          // Update scan results
+          if (scanResults && scanResults.orphaned_files) {
+            scanResults.orphaned_files = scanResults.orphaned_files.filter(
+              (o, i) => i !== rowIndex,
+            );
+            scanResults.statistics.orphaned_files =
+              scanResults.orphaned_files.length;
+            scanResults.statistics.orphaned_size =
+              scanResults.orphaned_files.reduce((sum, o) => sum + o.size, 0);
+            updateStats(scanResults.statistics);
+          }
+
+          showStatus(`✅ ${result.message}`, "success");
+          setTimeout(hideStatus, 3000);
+        } catch (error) {
+          showStatus(`❌ Error deleting file: ${error.message}`, "error");
+          setTimeout(hideStatus, 5000);
+        }
+      }
+
+      function updateHardlinks(groups) {
+        const content = document.getElementById("hardlinksContent");
+
+        if (groups.length === 0) {
+          content.innerHTML =
+            '<div class="empty-state"><p>No hardlink groups found.</p></div>';
+          return;
+        }
+
+        let html = "";
+        groups.forEach((group, index) => {
+          html += `
+                    <div style="margin-bottom: 20px; padding: 15px; background: #0d1117; border-radius: 6px;">
+                        <strong>Group ${index + 1}</strong> - ${group.hardlink_count} files, ${formatBytes(group.total_size)}
+                        <ul style="margin-top: 10px; margin-left: 20px;">
+                `;
+
+          group.files.forEach((file) => {
+            html += `<li><span class="file-path">${file}</span></li>`;
+          });
+
+          html += "</ul></div>";
+        });
+
+        content.innerHTML = html;
+      }
+
+      function updateRelationships(relationships) {
+        const content = document.getElementById("relationshipsContent");
+
+        if (relationships.length === 0) {
+          content.innerHTML =
+            '<div class="empty-state"><p>No file relationships found.</p></div>';
+          return;
+        }
+
+        const limit = 100;
+        const display = relationships.slice(0, limit);
+
+        let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>File</th>
+                            <th>Size</th>
+                            <th>Hardlinks</th>
+                            <th>Torrents</th>
+                            <th>Services</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+        display.forEach((rel) => {
+          const fileName = rel.file_path.split("/").pop();
+          const services = rel.arr_services
+            .map((s) => `<span class="badge ${s}">${s}</span>`)
+            .join(" ");
+
+          html += `
+                    <tr>
+                        <td><span class="file-path">${fileName}</span></td>
+                        <td>${formatBytes(rel.size)}</td>
+                        <td>${rel.hardlink_count}</td>
+                        <td>${rel.torrents.length}</td>
+                        <td>${services || "-"}</td>
+                    </tr>
+                `;
+        });
+
+        html += "</tbody></table>";
+
+        if (relationships.length > limit) {
+          html += `<p style="margin-top: 15px; color: #8b949e;">Showing ${limit} of ${relationships.length} files</p>`;
+        }
+
+        content.innerHTML = html;
+      }
+
+      async function runScan() {
+        const btn = document.getElementById("scanBtn");
+        const btnText = document.getElementById("scanBtnText");
+
+        btn.disabled = true;
+        btnText.textContent = "⏳ Scanning...";
+        showStatus("Running scan... This may take a few minutes.", "loading");
+
+        try {
+          const response = await fetch("/api/scan");
+          if (!response.ok) throw new Error("Scan failed");
+
+          scanResults = await response.json();
+
+          updateStats(scanResults.statistics);
+          updateOrphans(scanResults.orphaned_files);
+          updateHardlinks(scanResults.hardlink_groups);
+          updateRelationships(scanResults.file_relationships);
+
+          showStatus(
+            `✅ Scan completed in ${scanResults.statistics.scan_duration.toFixed(2)}s`,
+            "success",
+          );
+          setTimeout(hideStatus, 5000);
+        } catch (error) {
+          showStatus(`❌ Error: ${error.message}`, "error");
+        } finally {
+          btn.disabled = false;
+          btnText.textContent = "🔍 Run Full Scan";
+        }
+      }
+
+      function refreshData() {
+        if (scanResults) {
+          updateStats(scanResults.statistics);
+          updateOrphans(scanResults.orphaned_files);
+          updateHardlinks(scanResults.hardlink_groups);
+          updateRelationships(scanResults.file_relationships);
+          showStatus("✅ Data refreshed", "success");
+          setTimeout(hideStatus, 2000);
+        }
+      }
+
+      function exportJSON() {
+        if (!scanResults) {
+          showStatus("⚠️ No scan results to export", "error");
+          setTimeout(hideStatus, 2000);
+          return;
+        }
+
+        const dataStr = JSON.stringify(scanResults, null, 2);
+        const dataBlob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `qbit-arr-scan-${new Date().toISOString()}.json`;
+        link.click();
+
+        showStatus("✅ Exported to JSON", "success");
+        setTimeout(hideStatus, 2000);
+      }
+    </script>
+  </body>
+</html>

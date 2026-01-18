@@ -1,0 +1,39 @@
+# qbit-arr Configuration File
+# Copy this file to config.yaml and customize for your setup
+
+# qBittorrent connection settings
+qbittorrent:
+  host: localhost
+  port: 8080
+  username: admin
+  password: adminadmin
+
+# Radarr connection settings
+radarr:
+  host: localhost
+  port: 7878
+  api_key: YOUR_RADARR_API_KEY_HERE
+
+# Sonarr connection settings
+sonarr:
+  host: localhost
+  port: 8989
+  api_key: YOUR_SONARR_API_KEY_HERE
+
+# File system paths
+paths:
+  torrent_movies: /data/media/torrents/movies
+  torrent_tv: /data/media/torrents/tv
+  library_movies: /data/media/libraries/movies
+  library_tv: /data/media/libraries/tv
+
+  # Path mapping for Docker containers
+  # If qBittorrent/Radarr/Sonarr are in Docker and report different paths
+  remote_path_base: /media # Path as reported by services
+  local_path_base: /data/media # Actual filesystem path
+
+# Web server settings (optional, for web dashboard)
+web:
+  host: 0.0.0.0
+  port: 8000
+  reload: false
