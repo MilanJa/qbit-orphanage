@@ -113,40 +113,6 @@
         color: #f85149;
       }
 
-      .tabs {
-        display: flex;
-        gap: 10px;
-        margin-bottom: 20px;
-        border-bottom: 1px solid #30363d;
-      }
-
-      .tab {
-        background: none;
-        border: none;
-        color: #8b949e;
-        padding: 10px 20px;
-        cursor: pointer;
-        border-bottom: 2px solid transparent;
-        transition: all 0.2s;
-      }
-
-      .tab.active {
-        color: #58a6ff;
-        border-bottom-color: #58a6ff;
-      }
-
-      .tab:hover {
-        color: #c9d1d9;
-      }
-
-      .tab-content {
-        display: none;
-      }
-
-      .tab-content.active {
-        display: block;
-      }
-
       .section {
         background: #161b22;
         padding: 20px;
@@ -280,16 +246,15 @@
   <body>
     <div class="container">
       <header>
-        <h1>🎬 qbit-arr Dashboard</h1>
+        <h1>🎬 qbit-orphanage Dashboard</h1>
         <p class="tagline">
-          Media file relationship and orphan detection for qBittorrent, Radarr &
-          Sonarr
+          Orphaned file detection for qBittorrent, Radarr & Sonarr
         </p>
       </header>
 
       <div class="controls">
         <button id="scanBtn" onclick="runScan()">
-          <span id="scanBtnText">🔍 Run Full Scan</span>
+          <span id="scanBtnText">🔍 Run Scan</span>
         </button>
         <button class="secondary" onclick="refreshData()">🔄 Refresh</button>
         <button class="secondary" onclick="exportJSON()">💾 Export JSON</button>
@@ -301,59 +266,13 @@
         <!-- Stats will be populated here -->
       </div>
 
-      <div class="tabs">
-        <button class="tab active" onclick="switchTab('overview')">
-          Overview
-        </button>
-        <button class="tab" onclick="switchTab('orphans')">
-          Orphaned Files
-        </button>
-        <button class="tab" onclick="switchTab('hardlinks')">Hardlinks</button>
-        <button class="tab" onclick="switchTab('relationships')">
-          File Relationships
-        </button>
-      </div>
-
-      <div id="overview" class="tab-content active">
-        <div class="section">
-          <h2>System Overview</h2>
-          <p>
-            Click "Run Full Scan" to analyze your media files and detect
-            relationships between qBittorrent torrents, Radarr movies, and
-            Sonarr TV shows.
-          </p>
-        </div>
-      </div>
-
-      <div id="orphans" class="tab-content">
-        <div class="section">
-          <h2>Orphaned Files</h2>
-          <div id="orphansContent">
-            <div class="empty-state">
-              <p>No scan results yet. Run a scan to detect orphaned files.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div id="hardlinks" class="tab-content">
-        <div class="section">
-          <h2>Hardlink Groups</h2>
-          <div id="hardlinksContent">
-            <div class="empty-state">
-              <p>No scan results yet. Run a scan to analyze hardlinks.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div id="relationships" class="tab-content">
-        <div class="section">
-          <h2>File Relationships</h2>
-          <div id="relationshipsContent">
-            <div class="empty-state">
-              <p>No scan results yet. Run a scan to see file relationships.</p>
-            </div>
+      <div class="section">
+        <h2>Orphaned Files</h2>
+        <div id="orphansContent">
+          <div class="empty-state">
+            <p>
+              No scan results yet. Click "Run Scan" to detect orphaned files.
+            </p>
           </div>
         </div>
       </div>
@@ -361,20 +280,6 @@
 
     <script>
       let scanResults = null;
-
-      function switchTab(tabName) {
-        // Update tab buttons
-        document.querySelectorAll(".tab").forEach((tab) => {
-          tab.classList.remove("active");
-        });
-        event.target.classList.add("active");
-
-        // Update tab content
-        document.querySelectorAll(".tab-content").forEach((content) => {
-          content.classList.remove("active");
-        });
-        document.getElementById(tabName).classList.add("active");
-      }
 
       function showStatus(message, type = "loading") {
         const statusArea = document.getElementById("statusArea");
@@ -518,85 +423,6 @@
         }
       }
 
-      function updateHardlinks(groups) {
-        const content = document.getElementById("hardlinksContent");
-
-        if (groups.length === 0) {
-          content.innerHTML =
-            '<div class="empty-state"><p>No hardlink groups found.</p></div>';
-          return;
-        }
-
-        let html = "";
-        groups.forEach((group, index) => {
-          html += `
-                    <div style="margin-bottom: 20px; padding: 15px; background: #0d1117; border-radius: 6px;">
-                        <strong>Group ${index + 1}</strong> - ${group.hardlink_count} files, ${formatBytes(group.total_size)}
-                        <ul style="margin-top: 10px; margin-left: 20px;">
-                `;
-
-          group.files.forEach((file) => {
-            html += `<li><span class="file-path">${file}</span></li>`;
-          });
-
-          html += "</ul></div>";
-        });
-
-        content.innerHTML = html;
-      }
-
-      function updateRelationships(relationships) {
-        const content = document.getElementById("relationshipsContent");
-
-        if (relationships.length === 0) {
-          content.innerHTML =
-            '<div class="empty-state"><p>No file relationships found.</p></div>';
-          return;
-        }
-
-        const limit = 100;
-        const display = relationships.slice(0, limit);
-
-        let html = `
-                <table>
-                    <thead>
-                        <tr>
-                            <th>File</th>
-                            <th>Size</th>
-                            <th>Hardlinks</th>
-                            <th>Torrents</th>
-                            <th>Services</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-
-        display.forEach((rel) => {
-          const fileName = rel.file_path.split("/").pop();
-          const services = rel.arr_services
-            .map((s) => `<span class="badge ${s}">${s}</span>`)
-            .join(" ");
-
-          html += `
-                    <tr>
-                        <td><span class="file-path">${fileName}</span></td>
-                        <td>${formatBytes(rel.size)}</td>
-                        <td>${rel.hardlink_count}</td>
-                        <td>${rel.torrents.length}</td>
-                        <td>${services || "-"}</td>
-                    </tr>
-                `;
-        });
-
-        html += "</tbody></table>";
-
-        if (relationships.length > limit) {
-          html += `<p style="margin-top: 15px; color: #8b949e;">Showing ${limit} of ${relationships.length} files</p>`;
-        }
-
-        content.innerHTML = html;
-      }
-
       async function runScan() {
         const btn = document.getElementById("scanBtn");
         const btnText = document.getElementById("scanBtnText");
@@ -613,8 +439,6 @@
 
           updateStats(scanResults.statistics);
           updateOrphans(scanResults.orphaned_files);
-          updateHardlinks(scanResults.hardlink_groups);
-          updateRelationships(scanResults.file_relationships);
 
           showStatus(
             `✅ Scan completed in ${scanResults.statistics.scan_duration.toFixed(2)}s`,
@@ -625,7 +449,7 @@
           showStatus(`❌ Error: ${error.message}`, "error");
         } finally {
           btn.disabled = false;
-          btnText.textContent = "🔍 Run Full Scan";
+          btnText.textContent = "🔍 Run Scan";
         }
       }
 
@@ -633,8 +457,6 @@
         if (scanResults) {
           updateStats(scanResults.statistics);
           updateOrphans(scanResults.orphaned_files);
-          updateHardlinks(scanResults.hardlink_groups);
-          updateRelationships(scanResults.file_relationships);
           showStatus("✅ Data refreshed", "success");
           setTimeout(hideStatus, 2000);
         }
