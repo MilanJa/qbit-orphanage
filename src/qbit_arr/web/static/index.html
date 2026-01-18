@@ -313,19 +313,11 @@
         statsGrid.innerHTML = `
                 <div class="stat-card">
                     <div class="stat-label">Total Files</div>
-                    <div class="stat-value">${stats.total_files}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Total Size</div>
-                    <div class="stat-value">${formatBytes(stats.total_size)}</div>
+                    <div class="stat-value">${stats.total_files} <span style="font-size: 0.5em; color: #8b949e;">(${formatBytes(stats.total_size)})</span></div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">Orphaned Files</div>
-                    <div class="stat-value warning">${stats.orphaned_files}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Orphaned Size</div>
-                    <div class="stat-value warning">${formatBytes(stats.orphaned_size)}</div>
+                    <div class="stat-value warning">${stats.orphaned_files} <span style="font-size: 0.5em;">(${formatBytes(stats.orphaned_size)})</span></div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">Hardlink Groups</div>
@@ -333,11 +325,7 @@
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">Torrents</div>
-                    <div class="stat-value">${stats.torrents_count}</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-label">Cross-Seeded</div>
-                    <div class="stat-value">${stats.cross_seeded_groups}</div>
+                    <div class="stat-value">${stats.torrents_count} <span style="font-size: 0.5em; color: #8b949e;">(${stats.cross_seeded_groups} cross-seeded)</span></div>
                 </div>
             `;
       }
