@@ -241,6 +241,71 @@
         margin-bottom: 20px;
         opacity: 0.5;
       }
+
+      .orphan-group {
+        margin-bottom: 15px;
+        border: 1px solid #30363d;
+        border-radius: 6px;
+        overflow: hidden;
+      }
+
+      .group-header {
+        background: #21262d;
+        padding: 12px 15px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        user-select: none;
+        transition: background 0.2s;
+      }
+
+      .group-header:hover {
+        background: #30363d;
+      }
+
+      .group-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex: 1;
+      }
+
+      .group-chevron {
+        transition: transform 0.2s;
+        font-size: 1.2em;
+      }
+
+      .group-chevron.collapsed {
+        transform: rotate(-90deg);
+      }
+
+      .group-info {
+        color: #8b949e;
+        font-size: 0.9em;
+      }
+
+      .group-content {
+        max-height: 2000px;
+        overflow: hidden;
+        transition: max-height 0.3s ease-out;
+      }
+
+      .group-content.collapsed {
+        max-height: 0;
+      }
+
+      .group-files {
+        padding: 0;
+      }
+
+      .group-files table {
+        margin: 0;
+      }
+
+      .group-files tr:first-child td {
+        border-top: 1px solid #30363d;
+      }
     </style>
   </head>
   <body>
@@ -339,38 +404,100 @@
           return;
         }
 
-        let html = `
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Location</th>
-                            <th>Path</th>
-                            <th>Size</th>
-                            <th>Reason</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-
+        // Group orphans by parent directory
+        const groups = {};
         orphans.forEach((orphan, index) => {
-          html += `
-                    <tr id="orphan-row-${index}">
-                        <td><span class="badge orphan">${orphan.location}</span></td>
-                        <td><span class="file-path">${orphan.path}</span></td>
-                        <td>${formatBytes(orphan.size)}</td>
-                        <td>${orphan.reason}</td>
-                        <td>
-                            <button onclick="deleteFile('${orphan.path.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}', ${index})" 
-                                    style="background: #f85149; padding: 5px 10px; font-size: 12px;">
-                                🗑️ Delete
-                            </button>
-                        </td>
-                    </tr>
-                `;
+          const pathParts = orphan.path.split("/");
+          // Get parent directory (movie/show name)
+          // Path structure: /data/media/torrents|libraries/movies|tv/NAME/file
+          // Or for TV: /data/media/torrents|libraries/tv/SHOW_NAME/Season XX/file
+          let groupName = "Unknown";
+          let groupPath = "";
+
+          if (pathParts.length >= 6) {
+            const parentDir = pathParts[pathParts.length - 2]; // Immediate parent
+
+            // Check if parent is a season folder
+            const isSeasonFolder =
+              /season\s*\d+/i.test(parentDir) || /^s\d+$/i.test(parentDir);
+
+            if (isSeasonFolder && pathParts.length >= 7) {
+              // Use grandparent (show name) as group, keep full path for uniqueness
+              groupName = pathParts[pathParts.length - 3];
+              groupPath = pathParts.slice(0, -2).join("/"); // Path without season and filename
+            } else {
+              // Use parent directory (movie/show name)
+              groupName = parentDir;
+              groupPath = pathParts.slice(0, -1).join("/"); // Full path without filename
+            }
+          }
+
+          if (!groups[groupPath]) {
+            groups[groupPath] = {
+              name: groupName,
+              path: groupPath,
+              location: orphan.location,
+              files: [],
+            };
+          }
+
+          groups[groupPath].files.push({ ...orphan, originalIndex: index });
         });
 
-        html += "</tbody></table>";
+        // Sort groups by name
+        const sortedGroups = Object.values(groups).sort((a, b) =>
+          a.name.localeCompare(b.name),
+        );
+
+        let html = "";
+        sortedGroups.forEach((group, groupIndex) => {
+          const totalSize = group.files.reduce((sum, f) => sum + f.size, 0);
+          const fileCount = group.files.length;
+
+          html += `
+            <div class="orphan-group">
+              <div class="group-header" onclick="toggleGroup(${groupIndex})">
+                <div class="group-title">
+                  <span class="group-chevron" id="chevron-${groupIndex}">▼</span>
+                  <span class="badge orphan">${group.location}</span>
+                  <strong>${group.name}</strong>
+                </div>
+                <div class="group-info">
+                  ${fileCount} file${fileCount !== 1 ? "s" : ""} · ${formatBytes(totalSize)}
+                </div>
+              </div>
+              <div class="group-content" id="group-${groupIndex}">
+                <div class="group-files">
+                  <table>
+                    <tbody>
+          `;
+
+          group.files.forEach((file) => {
+            const fileName = file.path.split("/").pop();
+            html += `
+              <tr id="orphan-row-${file.originalIndex}">
+                <td><span class="file-path">${fileName}</span></td>
+                <td>${formatBytes(file.size)}</td>
+                <td>${file.reason}</td>
+                <td>
+                  <button onclick="deleteFile('${file.path.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}', ${file.originalIndex})" 
+                          style="background: #f85149; padding: 5px 10px; font-size: 12px;">
+                    🗑️ Delete
+                  </button>
+                </td>
+              </tr>
+            `;
+          });
+
+          html += `
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+
         content.innerHTML = html;
 
         // Enable/disable delete all button based on orphan count
@@ -378,6 +505,14 @@
         if (deleteAllBtn) {
           deleteAllBtn.disabled = orphans.length === 0;
         }
+      }
+
+      function toggleGroup(groupIndex) {
+        const content = document.getElementById(`group-${groupIndex}`);
+        const chevron = document.getElementById(`chevron-${groupIndex}`);
+
+        content.classList.toggle("collapsed");
+        chevron.classList.toggle("collapsed");
       }
 
       async function deleteAllOrphans() {
