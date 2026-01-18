@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="qbit-arr",
     description="Media file relationship and orphan detection tool",
-    version="0.1.0"
+    version="0.1.0",
 )
 
 # Global config - will be set on startup
@@ -28,22 +28,23 @@ config: Optional[Config] = None
 
 class ScanRequest(BaseModel):
     """Request model for triggering a scan."""
+
     config_path: Optional[str] = None
 
 
 class ConnectionManager:
     """Manages WebSocket connections for real-time updates."""
-    
+
     def __init__(self):
         self.active_connections: list[WebSocket] = []
-    
+
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
-    
+
     def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)
-    
+
     async def broadcast(self, message: dict):
         for connection in self.active_connections:
             try:
@@ -68,10 +69,10 @@ async def root():
     """Serve the main dashboard page."""
     static_dir = Path(__file__).parent / "static"
     index_file = static_dir / "index.html"
-    
+
     if index_file.exists():
         return FileResponse(index_file)
-    
+
     # Return a simple HTML page if static files don't exist yet
     return HTMLResponse("""
     <!DOCTYPE html>
@@ -158,7 +159,7 @@ async def root():
 async def api_scan():
     """
     Perform a complete scan of all services and filesystems.
-    
+
     Returns complete scan results including:
     - File relationships
     - Hardlink groups
@@ -168,15 +169,14 @@ async def api_scan():
     try:
         scanner = MediaScanner(config)
         results = scanner.scan_all()
-        
+
         # Broadcast scan completion to WebSocket clients
-        await manager.broadcast({
-            "type": "scan_complete",
-            "statistics": results.statistics.model_dump()
-        })
-        
+        await manager.broadcast(
+            {"type": "scan_complete", "statistics": results.statistics.model_dump()}
+        )
+
         return results
-        
+
     except Exception as e:
         logger.error(f"Scan failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -186,14 +186,14 @@ async def api_scan():
 async def api_orphans():
     """
     Get orphaned files only.
-    
+
     Returns a list of files that exist but are not tracked by any service.
     """
     try:
         scanner = MediaScanner(config)
         orphans = scanner.get_orphans_only()
         return orphans
-        
+
     except Exception as e:
         logger.error(f"Orphan scan failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -203,14 +203,14 @@ async def api_orphans():
 async def api_hardlinks():
     """
     Get hardlink groups only.
-    
+
     Returns groups of files that are hardlinked together.
     """
     try:
         scanner = MediaScanner(config)
         groups = scanner.get_hardlinks_only()
         return groups
-        
+
     except Exception as e:
         logger.error(f"Hardlink analysis failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -220,24 +220,15 @@ async def api_hardlinks():
 async def api_config():
     """Get current configuration (sanitized)."""
     return {
-        "qbittorrent": {
-            "url": config.qbittorrent.url,
-            "username": config.qbittorrent.username
-        },
-        "radarr": {
-            "url": config.radarr.url,
-            "configured": bool(config.radarr.api_key)
-        },
-        "sonarr": {
-            "url": config.sonarr.url,
-            "configured": bool(config.sonarr.api_key)
-        },
+        "qbittorrent": {"url": config.qbittorrent.url, "username": config.qbittorrent.username},
+        "radarr": {"url": config.radarr.url, "configured": bool(config.radarr.api_key)},
+        "sonarr": {"url": config.sonarr.url, "configured": bool(config.sonarr.api_key)},
         "paths": {
             "torrent_movies": str(config.paths.torrent_movies),
             "torrent_tv": str(config.paths.torrent_tv),
             "library_movies": str(config.paths.library_movies),
-            "library_tv": str(config.paths.library_tv)
-        }
+            "library_tv": str(config.paths.library_tv),
+        },
     }
 
 
@@ -245,45 +236,42 @@ async def api_config():
 async def api_delete_file(file_path: str):
     """
     Delete a file from the filesystem.
-    
+
     Args:
         file_path: Absolute path to the file to delete
-    
+
     Returns:
         Success message
     """
     try:
         import os
         from pathlib import Path
-        
+
         path = Path(file_path)
-        
+
         # Security check - ensure file is within allowed directories
         allowed_dirs = [
             config.paths.torrent_movies,
             config.paths.torrent_tv,
             config.paths.library_movies,
-            config.paths.library_tv
+            config.paths.library_tv,
         ]
-        
+
         if not any(path.is_relative_to(allowed_dir) for allowed_dir in allowed_dirs):
-            raise HTTPException(
-                status_code=403,
-                detail="File is not within allowed directories"
-            )
-        
+            raise HTTPException(status_code=403, detail="File is not within allowed directories")
+
         if not path.exists():
             raise HTTPException(status_code=404, detail="File not found")
-        
+
         if not path.is_file():
             raise HTTPException(status_code=400, detail="Path is not a file")
-        
+
         # Delete the file
         os.remove(path)
         logger.info(f"Deleted file: {path}")
-        
+
         return {"message": f"Successfully deleted {path.name}", "path": str(path)}
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -295,7 +283,7 @@ async def api_delete_file(file_path: str):
 async def websocket_endpoint(websocket: WebSocket):
     """
     WebSocket endpoint for real-time updates.
-    
+
     Clients can connect to receive live scan progress updates.
     """
     await manager.connect(websocket)
@@ -305,7 +293,7 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
             # Echo back for now
             await websocket.send_json({"type": "pong", "message": data})
-            
+
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
@@ -319,10 +307,5 @@ if static_dir.exists():
 def run_server(host: str = "0.0.0.0", port: int = 8000, reload: bool = False):
     """Run the FastAPI server."""
     import uvicorn
-    uvicorn.run(
-        "qbit_arr.web.app:app",
-        host=host,
-        port=port,
-        reload=reload,
-        log_level="info"
-    )
+
+    uvicorn.run("qbit_arr.web.app:app", host=host, port=port, reload=reload, log_level="info")
