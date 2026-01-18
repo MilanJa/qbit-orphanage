@@ -258,6 +258,14 @@
         </button>
         <button class="secondary" onclick="refreshData()">🔄 Refresh</button>
         <button class="secondary" onclick="exportJSON()">💾 Export JSON</button>
+        <button
+          id="deleteAllBtn"
+          onclick="deleteAllOrphans()"
+          style="background: #f85149"
+          disabled
+        >
+          🗑️ Delete All Orphaned Files
+        </button>
       </div>
 
       <div id="statusArea"></div>
@@ -372,6 +380,90 @@
 
         html += "</tbody></table>";
         content.innerHTML = html;
+
+        // Enable/disable delete all button based on orphan count
+        const deleteAllBtn = document.getElementById("deleteAllBtn");
+        if (deleteAllBtn) {
+          deleteAllBtn.disabled = orphans.length === 0;
+        }
+      }
+
+      async function deleteAllOrphans() {
+        if (
+          !scanResults ||
+          !scanResults.orphaned_files ||
+          scanResults.orphaned_files.length === 0
+        ) {
+          showStatus("⚠️ No orphaned files to delete", "error");
+          setTimeout(hideStatus, 2000);
+          return;
+        }
+
+        const count = scanResults.orphaned_files.length;
+        const totalSize = formatBytes(
+          scanResults.orphaned_files.reduce((sum, o) => sum + o.size, 0),
+        );
+
+        if (
+          !confirm(
+            `Are you sure you want to delete ALL ${count} orphaned files (${totalSize})?\n\nThis action cannot be undone!`,
+          )
+        ) {
+          return;
+        }
+
+        const deleteAllBtn = document.getElementById("deleteAllBtn");
+        deleteAllBtn.disabled = true;
+
+        let deleted = 0;
+        let failed = 0;
+        const filesToDelete = [...scanResults.orphaned_files];
+
+        showStatus(`Deleting ${count} files...`, "loading");
+
+        for (let i = 0; i < filesToDelete.length; i++) {
+          const orphan = filesToDelete[i];
+          try {
+            const response = await fetch(
+              `/api/file?file_path=${encodeURIComponent(orphan.path)}`,
+              { method: "DELETE" },
+            );
+
+            if (response.ok) {
+              deleted++;
+              // Remove row with animation
+              const row = document.getElementById(`orphan-row-${i}`);
+              if (row) {
+                row.style.backgroundColor = "#2ea04333";
+                setTimeout(() => row.remove(), 300);
+              }
+            } else {
+              failed++;
+            }
+          } catch (error) {
+            failed++;
+          }
+
+          // Update progress
+          showStatus(
+            `Deleting files: ${deleted + failed}/${count}...`,
+            "loading",
+          );
+        }
+
+        // Update scan results
+        scanResults.orphaned_files = [];
+        scanResults.statistics.orphaned_files = 0;
+        scanResults.statistics.orphaned_size = 0;
+        updateStats(scanResults.statistics);
+        updateOrphans([]);
+
+        if (failed === 0) {
+          showStatus(`✅ Successfully deleted all ${deleted} files`, "success");
+        } else {
+          showStatus(`⚠️ Deleted ${deleted} files, ${failed} failed`, "error");
+        }
+        setTimeout(hideStatus, 5000);
       }
 
       async function deleteFile(filePath, rowIndex) {
