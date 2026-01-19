@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List, Optional
 from datetime import datetime
 import logging
+import re
 
 from qbittorrentapi import Client as QBitClient
 from qbittorrentapi.exceptions import APIConnectionError
@@ -12,6 +13,42 @@ from qbit_arr.core.models import TorrentInfo, TorrentFile
 from qbit_arr.config import QBittorrentConfig, PathsConfig
 
 logger = logging.getLogger(__name__)
+
+# Minimum file size for valid media files (100MB)
+MIN_MEDIA_SIZE = 100 * 1024 * 1024
+
+# Patterns for files to skip during torrent file processing
+SKIP_PATTERNS = [
+    r"(?i)sample",
+    r"(?i)\.nfo$",
+    r"(?i)\.txt$",
+    r"(?i)\.srt$",
+    r"(?i)\.sub$",
+    r"(?i)\.idx$",
+    r"(?i)\.jpg$",
+    r"(?i)\.jpeg$",
+    r"(?i)\.png$",
+    r"(?i)trailer",
+    r"(?i)\bproof\b",
+]
+
+
+def should_skip_torrent_file(file_path: Path, file_size: int) -> bool:
+    """Check if a torrent file should be skipped."""
+    file_path_str = str(file_path)
+
+    # Check against skip patterns
+    for pattern in SKIP_PATTERNS:
+        if re.search(pattern, file_path_str):
+            return True
+
+    # Skip small files (likely not main media content)
+    # But be more lenient than the filesystem scan (10MB vs 100MB)
+    # to allow for legitimate small video files in torrents
+    if file_size < 10 * 1024 * 1024:  # 10MB
+        return True
+
+    return False
 
 
 class QBittorrentClient:
@@ -58,6 +95,7 @@ class QBittorrentClient:
                 files = self._client.torrents_files(torrent_hash=torrent.hash)
 
                 torrent_files = []
+                skipped_count = 0
                 for file in files:
                     file_path = Path(torrent.save_path) / file.name
 
@@ -65,7 +103,18 @@ class QBittorrentClient:
                     if self.path_config:
                         file_path = self.path_config.remap_path(file_path)
 
+                    # Skip sample files and other non-essential files
+                    if should_skip_torrent_file(file_path, file.size):
+                        skipped_count += 1
+                        logger.debug(f"Skipping file: {file_path} (size: {file.size})")
+                        continue
+
                     torrent_files.append(TorrentFile(path=file_path, size=file.size))
+
+                if skipped_count > 0:
+                    logger.debug(
+                        f"Torrent '{torrent.name}': kept {len(torrent_files)} files, skipped {skipped_count} files"
+                    )
 
                 # Get tracker info
                 trackers = self._client.torrents_trackers(torrent_hash=torrent.hash)

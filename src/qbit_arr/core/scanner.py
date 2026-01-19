@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Dict, List, Set
 import time
 import logging
+import re
 from collections import defaultdict
 
 from qbit_arr.config import Config
@@ -20,6 +21,85 @@ from qbit_arr.core.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Patterns for files to skip during scanning
+SKIP_PATTERNS = [
+    r"(?i)sample",  # Sample files
+    r"(?i)\.nfo$",  # NFO metadata files
+    r"(?i)\.txt$",  # Text files
+    r"(?i)\.srt$",  # Subtitle files
+    r"(?i)\.sub$",  # Subtitle files
+    r"(?i)\.idx$",  # Subtitle index files
+    r"(?i)\.jpg$",  # Image files
+    r"(?i)\.jpeg$",  # Image files
+    r"(?i)\.png$",  # Image files
+    r"(?i)\.gif$",  # Image files
+    r"(?i)\.bmp$",  # Image files
+    r"(?i)[/\\]subs?[/\\]",  # Subtitle directories (Windows and Unix paths)
+    r"(?i)[/\\]extras?[/\\]",  # Extras directories
+    r"(?i)[/\\]featurettes?[/\\]",  # Featurette directories
+    r"(?i)[/\\]behind[\s-]*the[\s-]*scenes?[/\\]",  # BTS directories
+    r"(?i)[/\\]deleted[\s-]*scenes?[/\\]",  # Deleted scenes
+    r"(?i)trailer",  # Trailer files
+    r"(?i)\bproof\b",  # Proof files
+    r"(?i)\.srr$",  # SRR files
+]
+
+# Minimum file size for valid media files (100MB)
+MIN_MEDIA_SIZE = 100 * 1024 * 1024
+
+
+def should_skip_file(file_path: Path) -> bool:
+    """Check if a file should be skipped based on patterns."""
+    file_path_str = str(file_path)
+    for pattern in SKIP_PATTERNS:
+        if re.search(pattern, file_path_str):
+            return True
+    return False
+
+
+def is_valid_media_file(file_path: Path, file_size: int) -> bool:
+    """Check if a file is a valid media file for processing."""
+    if should_skip_file(file_path):
+        return False
+
+    # Check if file size is above minimum threshold
+    if file_size < MIN_MEDIA_SIZE:
+        return False
+
+    # Check if it's a video file
+    video_extensions = {".mkv", ".mp4", ".avi", ".m2ts", ".ts", ".mov", ".wmv", ".flv", ".webm"}
+    if file_path.suffix.lower() not in video_extensions:
+        return False
+
+    return True
+
+
+def classify_files(files: List) -> Dict[str, List]:
+    """Classify files into main content, samples, and extras."""
+    result = {
+        "main_files": [],
+        "samples": [],
+        "extras": [],
+        "skipped": [],
+    }
+
+    for file in files:
+        file_path_str = str(file.path)
+
+        # Check if it's a sample file
+        if re.search(r"(?i)sample", file_path_str):
+            result["samples"].append(file)
+        # Check if it should be skipped (subtitles, images, etc.)
+        elif should_skip_file(file.path):
+            result["skipped"].append(file)
+        # Check if it's too small to be a main media file
+        elif file.size < MIN_MEDIA_SIZE:
+            result["extras"].append(file)
+        else:
+            result["main_files"].append(file)
+
+    return result
 
 
 class MediaScanner:
@@ -61,19 +141,39 @@ class MediaScanner:
 
             # 2. Scan filesystems
             logger.info("Scanning torrent directories...")
-            torrent_files = []
+            torrent_files_raw = []
             for path in [self.config.paths.torrent_movies, self.config.paths.torrent_tv]:
                 if path.exists():
                     files = self.hardlink_detector.scan_directory(path)
-                    torrent_files.extend(files)
+                    torrent_files_raw.extend(files)
+
+            # Classify torrent files
+            torrent_classified = classify_files(torrent_files_raw)
+            torrent_files = torrent_classified["main_files"]
+            logger.info(
+                f"Torrent files: {len(torrent_files)} main, "
+                f"{len(torrent_classified['samples'])} samples, "
+                f"{len(torrent_classified['extras'])} extras, "
+                f"{len(torrent_classified['skipped'])} skipped"
+            )
             results.statistics.torrent_files = len(torrent_files)
 
             logger.info("Scanning library directories...")
-            library_files = []
+            library_files_raw = []
             for path in [self.config.paths.library_movies, self.config.paths.library_tv]:
                 if path.exists():
                     files = self.hardlink_detector.scan_directory(path)
-                    library_files.extend(files)
+                    library_files_raw.extend(files)
+
+            # Classify library files
+            library_classified = classify_files(library_files_raw)
+            library_files = library_classified["main_files"]
+            logger.info(
+                f"Library files: {len(library_files)} main, "
+                f"{len(library_classified['samples'])} samples, "
+                f"{len(library_classified['extras'])} extras, "
+                f"{len(library_classified['skipped'])} skipped"
+            )
             results.statistics.library_files = len(library_files)
 
             # 3. Detect hardlinks
@@ -242,21 +342,9 @@ class MediaScanner:
                 )
 
         # Check library directory files
+        # Note: Files are already filtered by classify_files(), so we only have main media files here
         for file in library_files:
             if file.path not in radarr_tracked_paths and file.path not in sonarr_tracked_paths:
-                # Skip common non-media files that are often added manually
-                ignored_extensions = {".srt", ".nfo", ".png", ".jpg", ".txt", ".srr"}
-                if file.path.suffix.lower() in ignored_extensions:
-                    continue
-
-                # Skip files with "sample" in the name
-                if "sample" in file.path.name.lower():
-                    continue
-
-                # Skip files smaller than 1 MB
-                if file.size < 1_000_000:
-                    continue
-
                 orphaned.append(
                     OrphanedFile(
                         path=file.path,
