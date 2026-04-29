@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from qbit_arr.config import get_config, Config
 from qbit_arr.core.scanner import MediaScanner
-from qbit_arr.core.models import ScanResults, OrphanedFile, HardlinkGroup
+from qbit_arr.core.models import ScanResults, OrphanedFile, HardlinkGroup, UnmatchedTorrent
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +213,24 @@ async def api_hardlinks():
 
     except Exception as e:
         logger.error(f"Hardlink analysis failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/unmatched", response_model=list[UnmatchedTorrent])
+async def api_unmatched():
+    """
+    Get torrents with no matching Radarr or Sonarr entries.
+
+    Returns torrents that have no files tracked by either Radarr or Sonarr.
+    These may be candidates for deletion if no longer needed.
+    """
+    try:
+        scanner = MediaScanner(config)
+        unmatched = scanner.get_unmatched_torrents()
+        return unmatched
+
+    except Exception as e:
+        logger.error(f"Unmatched torrent scan failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

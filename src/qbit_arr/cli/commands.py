@@ -13,6 +13,7 @@ from qbit_arr.cli.formatters import (
     print_scan_results,
     print_orphaned_files,
     print_hardlink_groups,
+    print_unmatched_torrents,
     print_error,
     print_success,
     create_progress,
@@ -160,6 +161,48 @@ def hardlinks(ctx: click.Context, output_json: bool) -> None:
         )
     else:
         print_hardlink_groups(groups)
+
+
+@cli.command()
+@click.option("--json", "output_json", is_flag=True, help="Output results as JSON")
+@click.pass_context
+def unmatched(ctx: click.Context, output_json: bool) -> None:
+    """
+    Find torrents with no matching Radarr or Sonarr entries.
+
+    Shows torrents that exist in qBittorrent but have no files tracked
+    by either Radarr or Sonarr. These may be safe to delete if they
+    are no longer needed.
+    """
+    config = ctx.obj["config"]
+
+    with create_progress() as progress:
+        task = progress.add_task("[cyan]Finding unmatched torrents...", total=None)
+
+        try:
+            scanner = MediaScanner(config)
+            unmatched_torrents = scanner.get_unmatched_torrents()
+            progress.update(task, completed=True)
+
+        except Exception as e:
+            progress.stop()
+            print_error(f"Unmatched torrent scan failed: {e}")
+            logger.exception("Unmatched torrent scan failed")
+            sys.exit(1)
+
+    if output_json:
+        import json
+
+        console.print(
+            json.dumps([u.model_dump(mode="json") for u in unmatched_torrents], indent=2, default=str)
+        )
+    else:
+        print_unmatched_torrents(unmatched_torrents)
+        
+    if unmatched_torrents:
+        print_success(f"Found {len(unmatched_torrents)} unmatched torrent(s)")
+    else:
+        print_success("All torrents have matching entries!")
 
 
 @cli.command()

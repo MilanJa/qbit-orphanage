@@ -15,6 +15,7 @@ from qbit_arr.core.models import (
     HardlinkGroup,
     FileRelationship,
     ScanStatistics,
+    UnmatchedTorrent,
 )
 
 console = Console()
@@ -95,6 +96,67 @@ def print_hardlink_groups(groups: List[HardlinkGroup]) -> None:
 
         console.print(tree)
         console.print()
+
+
+def print_unmatched_torrents(unmatched: List[UnmatchedTorrent]) -> None:
+    """Print unmatched torrents in a table."""
+    if not unmatched:
+        console.print("[green]All torrents have matching Radarr or Sonarr entries![/green]")
+        return
+
+    # Calculate total size of unmatched torrents
+    total_size = sum(sum(f.size for f in t.torrent_info.files) for t in unmatched)
+    
+    table = Table(
+        title=f"Unmatched Torrents ({len(unmatched)}) - Total Size: {format_size(total_size)}",
+        box=box.ROUNDED
+    )
+    table.add_column("Name", style="yellow", overflow="fold", max_width=50)
+    table.add_column("Hash", style="cyan", max_width=12)
+    table.add_column("Category", style="blue")
+    table.add_column("Size", style="green", justify="right")
+    table.add_column("Files", style="magenta", justify="center")
+    table.add_column("State", style="white")
+    table.add_column("Added", style="dim")
+    table.add_column("Potential Matches", style="yellow", overflow="fold", max_width=30)
+
+    for unmatched_torrent in unmatched:
+        torrent = unmatched_torrent.torrent_info
+        total_torrent_size = sum(f.size for f in torrent.files)
+        
+        # Truncate hash for display
+        hash_display = torrent.hash[:10] + "..."
+        
+        # Format state with color
+        state = torrent.state
+        if "downloading" in state.lower():
+            state_display = f"[cyan]{state}[/cyan]"
+        elif "seeding" in state.lower():
+            state_display = f"[green]{state}[/green]"
+        elif "paused" in state.lower():
+            state_display = f"[yellow]{state}[/yellow]"
+        elif "error" in state.lower():
+            state_display = f"[red]{state}[/red]"
+        else:
+            state_display = state
+        
+        # Format potential matches
+        matches_display = "\n".join(unmatched_torrent.potential_matches) if unmatched_torrent.potential_matches else "[dim]None[/dim]"
+        
+        table.add_row(
+            torrent.name,
+            hash_display,
+            torrent.category or "[dim]None[/dim]",
+            format_size(total_torrent_size),
+            str(len(torrent.files)),
+            state_display,
+            torrent.added_on.strftime("%Y-%m-%d"),
+            matches_display,
+        )
+
+    console.print(table)
+    console.print()
+    console.print("[dim]Tip: Review these torrents - they may be safe to delete if no longer needed.[/dim]")
 
 
 def print_file_relationships(relationships: List[FileRelationship], limit: int = 50) -> None:

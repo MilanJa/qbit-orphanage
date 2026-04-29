@@ -117,6 +117,7 @@ class ScanStatistics(BaseModel):
     torrents_count: int = 0
     radarr_items: int = 0
     sonarr_items: int = 0
+    unmatched_torrents: int = 0
     scan_duration: float = 0.0
 
 
@@ -148,6 +149,17 @@ class CrossSeedGroup(BaseModel):
     torrents: List[TorrentInfo] = Field(default_factory=list)
     trackers: Set[str] = Field(default_factory=set)
     total_size: int = 0
+
+    class Config:
+        arbitrary_types_allowed = True
+
+
+class UnmatchedTorrent(BaseModel):
+    """Torrent that has no files tracked by Radarr or Sonarr."""
+
+    torrent_info: TorrentInfo
+    reason: str  # Why it's unmatched
+    potential_matches: List[str] = Field(default_factory=list)  # Similar titles found
 
     class Config:
         arbitrary_types_allowed = True

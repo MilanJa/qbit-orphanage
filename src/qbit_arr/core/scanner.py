@@ -18,6 +18,7 @@ from qbit_arr.core.models import (
     OrphanedFile,
     CrossSeedGroup,
     TorrentInfo,
+    UnmatchedTorrent,
 )
 
 logger = logging.getLogger(__name__)
@@ -394,3 +395,70 @@ class MediaScanner:
         """Quick scan to get only hardlink information."""
         results = self.scan_all()
         return results.hardlink_groups
+
+    def get_unmatched_torrents(self) -> List[UnmatchedTorrent]:
+        """
+        Find torrents that have no files tracked by Radarr or Sonarr.
+        
+        A torrent is considered unmatched if none of its files are tracked
+        by either Radarr or Sonarr.
+        """
+        logger.info("Finding unmatched torrents...")
+        
+        # Get data from all services
+        torrents = self.qbit_client.get_torrents()
+        radarr_media = self.radarr_client.get_movies()
+        sonarr_media = self.sonarr_client.get_series()
+        
+        # Build sets of tracked file paths
+        radarr_files = {m.file_path for m in radarr_media if m.file_path}
+        
+        sonarr_files = set()
+        try:
+            sonarr_files = set(self.sonarr_client.get_episode_files())
+        except Exception as e:
+            logger.warning(f"Could not get Sonarr episode files: {e}")
+        
+        all_tracked_files = radarr_files | sonarr_files
+        
+        # Find unmatched torrents
+        unmatched = []
+        for torrent in torrents:
+            # Check if any of the torrent's files are tracked
+            has_match = False
+            for tfile in torrent.files:
+                if tfile.path in all_tracked_files:
+                    has_match = True
+                    break
+            
+            if not has_match:
+                # Determine reason
+                if not torrent.files:
+                    reason = "No files in torrent"
+                elif len(torrent.files) == 0:
+                    reason = "No valid media files"
+                else:
+                    reason = "No files tracked by Radarr or Sonarr"
+                
+                # Try to find potential matches based on name similarity
+                potential_matches = []
+                torrent_name_lower = torrent.name.lower()
+                
+                for media in radarr_media:
+                    if media.title.lower() in torrent_name_lower or torrent_name_lower in media.title.lower():
+                        potential_matches.append(f"Radarr: {media.title}")
+                
+                for media in sonarr_media:
+                    if media.title.lower() in torrent_name_lower or torrent_name_lower in media.title.lower():
+                        potential_matches.append(f"Sonarr: {media.title}")
+                
+                unmatched.append(
+                    UnmatchedTorrent(
+                        torrent_info=torrent,
+                        reason=reason,
+                        potential_matches=potential_matches[:5],  # Limit to 5 suggestions
+                    )
+                )
+        
+        logger.info(f"Found {len(unmatched)} unmatched torrents out of {len(torrents)} total")
+        return unmatched

@@ -340,6 +340,17 @@
       </div>
 
       <div class="section">
+        <h2>Unmatched Torrents</h2>
+        <div id="unmatchedContent">
+          <div class="empty-state">
+            <p>
+              No scan results yet. Click "Run Scan" to detect unmatched torrents.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
         <h2>Orphaned Files</h2>
         <div id="orphansContent">
           <div class="empty-state">
@@ -383,6 +394,10 @@
                 <div class="stat-card">
                     <div class="stat-label">Orphaned Files</div>
                     <div class="stat-value warning">${stats.orphaned_files} <span style="font-size: 0.5em;">(${formatBytes(stats.orphaned_size)})</span></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Unmatched Torrents</div>
+                    <div class="stat-value warning">${stats.unmatched_torrents || 0}</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">Hardlink Groups</div>
@@ -513,6 +528,61 @@
 
         content.classList.toggle("collapsed");
         chevron.classList.toggle("collapsed");
+      }
+
+      function updateUnmatched(unmatched) {
+        const content = document.getElementById("unmatchedContent");
+
+        if (unmatched.length === 0) {
+          content.innerHTML =
+            '<div class="empty-state"><p>✅ All torrents have matching Radarr or Sonarr entries!</p></div>';
+          return;
+        }
+
+        let html = '<table><thead><tr>';
+        html += '<th>Torrent Name</th>';
+        html += '<th>Category</th>';
+        html += '<th>Size</th>';
+        html += '<th>Files</th>';
+        html += '<th>State</th>';
+        html += '<th>Added</th>';
+        html += '<th>Potential Matches</th>';
+        html += '</tr></thead><tbody>';
+
+        unmatched.forEach((item) => {
+          const torrent = item.torrent_info;
+          const totalSize = torrent.files.reduce((sum, f) => sum + f.size, 0);
+          const addedDate = new Date(torrent.added_on).toLocaleDateString();
+          
+          // Color code state
+          let stateColor = '#c9d1d9';
+          const state = torrent.state.toLowerCase();
+          if (state.includes('downloading')) stateColor = '#58a6ff';
+          else if (state.includes('seeding')) stateColor = '#3fb950';
+          else if (state.includes('paused')) stateColor = '#f0883e';
+          else if (state.includes('error')) stateColor = '#f85149';
+
+          html += '<tr>';
+          html += `<td><span class="file-path">${torrent.name}</span></td>`;
+          html += `<td>${torrent.category || '<span style="color: #8b949e;">None</span>'}</td>`;
+          html += `<td>${formatBytes(totalSize)}</td>`;
+          html += `<td>${torrent.files.length}</td>`;
+          html += `<td><span style="color: ${stateColor};">${torrent.state}</span></td>`;
+          html += `<td>${addedDate}</td>`;
+          
+          // Potential matches
+          if (item.potential_matches && item.potential_matches.length > 0) {
+            const matches = item.potential_matches.join('<br>');
+            html += `<td style="font-size: 0.85em; color: #f0883e;">${matches}</td>`;
+          } else {
+            html += '<td style="color: #8b949e;">None</td>';
+          }
+          
+          html += '</tr>';
+        });
+
+        html += '</tbody></table>';
+        content.innerHTML = html;
       }
 
       async function deleteAllOrphans() {
@@ -656,8 +726,18 @@
 
           scanResults = await response.json();
 
+          // Fetch unmatched torrents
+          const unmatchedResponse = await fetch("/api/unmatched");
+          const unmatchedData = await unmatchedResponse.json();
+          
+          // Update statistics with unmatched count
+          if (scanResults.statistics) {
+            scanResults.statistics.unmatched_torrents = unmatchedData.length;
+          }
+
           updateStats(scanResults.statistics);
           updateOrphans(scanResults.orphaned_files);
+          updateUnmatched(unmatchedData);
 
           showStatus(
             `✅ Scan completed in ${scanResults.statistics.scan_duration.toFixed(2)}s`,
@@ -676,6 +756,11 @@
         if (scanResults) {
           updateStats(scanResults.statistics);
           updateOrphans(scanResults.orphaned_files);
+          // Re-fetch unmatched torrents on refresh
+          fetch("/api/unmatched")
+            .then(response => response.json())
+            .then(data => updateUnmatched(data))
+            .catch(error => console.error("Failed to refresh unmatched torrents:", error));
           showStatus("✅ Data refreshed", "success");
           setTimeout(hideStatus, 2000);
         }
